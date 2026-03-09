@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # CodeRunner 🚀
 ### Cloud-Based Multi-Language Code Execution Platform
 
@@ -231,3 +232,6 @@ sudo systemctl restart nginx
 | Execution | Docker (Python · Java · C++) |
 | Database | PostgreSQL (AWS RDS) |
 | Hosting | AWS EC2 + RDS (+ optional S3) |
+=======
+# coderunner
+>>>>>>> 31f649419cafc40be2210b3ae613da2071fc5125
