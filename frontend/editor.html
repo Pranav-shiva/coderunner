@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editor — CodeRunner</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Bebas+Neue&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+  <style>
+    :root {
+      --bg:        #080b0f;
+      --bg2:       #0d1117;
+      --surface:   #111820;
+      --surface2:  #161e28;
+      --border:    #1e2a38;
+      --border2:   #243040;
+      --accent:    #00d4ff;
+      --accent-dim:#00d4ff22;
+      --green:     #00ff88;
+      --red:       #ff4757;
+      --yellow:    #ffd32a;
+      --text:      #c9d8e8;
+      --text-dim:  #5a7080;
+      --text-mid:  #8da0b0;
+      --mono:      'JetBrains Mono', monospace;
+      --display:   'Bebas Neue', sans-serif;
+      --body:      'Barlow', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--body);
+      font-size: 15px;
+      line-height: 1.6;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+    @keyframes blink { 0%,90%,100%{opacity:1} 45%{opacity:0} }
+    @keyframes spin   { to { transform: rotate(360deg); } }
+    @keyframes pulse  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+    /* ── Layout ── */
+    .editor-page {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Top Bar ── */
+    .topbar {
+      height: 50px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+      z-index: 50;
+    }
+
+    .topbar-logo {
+      font-family: var(--display);
+      font-size: 20px;
+      letter-spacing: 3px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .logo-dot {
+      width: 7px; height: 7px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: blink 2.5s infinite;
+    }
+
+    .sep {
+      width: 1px; height: 26px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Language tabs */
+    .lang-tabs { display: flex; gap: 3px; }
+
+    .lang-tab {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 1px;
+      padding: 6px 14px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      background: none;
+      transition: all .15s;
+    }
+    .lang-tab:hover  { background: var(--surface); color: var(--text); }
+    .lang-tab.active {
+      background: var(--surface2);
+      border-color: var(--border2);
+      color: var(--accent);
+    }
+
+    .topbar-file {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      flex: 1;
+    }
+
+    /* Run button */
+    .run-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--green); color: var(--bg);
+      font-family: var(--mono); font-size: 11px;
+      font-weight: 700; letter-spacing: 2px;
+      padding: 8px 22px; border-radius: 4px;
+      border: none; cursor: pointer;
+      transition: all .2s; flex-shrink: 0;
+    }
+    .run-btn:hover {
+      background: #22ffaa;
+      box-shadow: 0 4px 20px rgba(0,255,136,0.35);
+      transform: translateY(-1px);
+    }
+    .run-btn:disabled {
+      background: var(--border2); color: var(--text-dim);
+      transform: none; box-shadow: none; cursor: not-allowed;
+    }
+
+    .user-email {
+      font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+    }
+    .logout-btn {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+      color: var(--text-dim); border: 1px solid var(--border);
+      padding: 5px 12px; border-radius: 3px;
+      cursor: pointer; background: none; transition: all .15s;
+    }
+    .logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── Rate warning ── */
+    .rate-warning {
+      background: rgba(255,211,42,0.08);
+      border-bottom: 1px solid rgba(255,211,42,0.2);
+      color: var(--yellow);
+      padding: 7px 16px;
+      font-family: var(--mono); font-size: 11px;
+      letter-spacing: .5px; text-align: center;
+      display: none; flex-shrink: 0;
+    }
+    .rate-warning.show { display: block; }
+
+    /* ── Body ── */
+    .editor-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 256px;
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-head {
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .sidebar-title {
+      font-family: var(--mono); font-size: 10px;
+      letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim);
+    }
+    .refresh-btn {
+      background: none; border: none; color: var(--text-dim);
+      cursor: pointer; padding: 4px; border-radius: 3px; line-height: 1;
+      transition: color .15s;
+    }
+    .refresh-btn:hover { color: var(--accent); }
+
+    .history-list { flex: 1; overflow-y: auto; padding: 8px; }
+
+    .history-empty {
+      padding: 32px 16px; text-align: center;
+      font-family: var(--mono); font-size: 11px;
+      color: var(--text-dim); line-height: 1.9;
+    }
+
+    .history-item {
+      padding: 10px 12px; border-radius: 4px;
+      cursor: pointer; border: 1px solid transparent;
+      margin-bottom: 4px; transition: all .15s;
+    }
+    .history-item:hover { background: var(--surface); border-color: var(--border); }
+    .history-item.active { background: var(--surface2); border-color: var(--border2); }
+
+    .history-item-top {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 4px;
+    }
+    .hlang {
+      font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px;
+      text-transform: uppercase; padding: 2px 8px; border-radius: 2px;
+    }
+    .hlang-python { background: rgba(0,212,255,0.12); color: var(--accent); }
+    .hlang-java   { background: rgba(255,211,42,0.1);  color: var(--yellow); }
+    .hlang-cpp    { background: rgba(0,255,136,0.1);   color: var(--green); }
+    .hstatus { font-family: var(--mono); font-size: 11px; }
+    .hstatus.ok  { color: var(--green); }
+    .hstatus.err { color: var(--red); }
+    .hpreview {
+      font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px;
+    }
+    .htime { font-family: var(--mono); font-size: 10px; color: var(--text-dim); opacity: .6; }
+
+    /* ── Editor main ── */
+    .editor-main {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    .monaco-wrap { flex: 1; position: relative; overflow: hidden; }
+    #monacoEditor { width: 100%; height: 100%; }
+
+    /* Resize handle */
+    .resize-handle {
+      height: 5px; background: var(--bg2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      cursor: row-resize; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
+    }
+    .resize-handle:hover { background: var(--surface); }
+    .resize-handle::after {
+      content: '• • •'; font-size: 8px; letter-spacing: 3px;
+      color: var(--border2);
+    }
+
+    /* ── Output panel ── */
+    .output-panel {
+      height: 220px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      background: var(--bg); min-height: 80px; max-height: 70vh;
+    }
+
+    .output-topbar {
+      height: 36px; background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 16px; gap: 14px; flex-shrink: 0;
+    }
+    .output-label {
+      font-family: var(--mono); font-size: 10px;
+      letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim);
+    }
+    .output-ind { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; }
+    .ind-idle    { color: var(--text-dim); }
+    .ind-running { color: var(--yellow); animation: blink 1s infinite; }
+    .ind-success { color: var(--green); }
+    .ind-error   { color: var(--red); }
+
+    .output-stats { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+    .clear-btn {
+      font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+      background: none; border: none; cursor: pointer;
+      letter-spacing: 1px; transition: color .15s;
+    }
+    .clear-btn:hover { color: var(--red); }
+
+    .output-content {
+      flex: 1; overflow-y: auto;
+      padding: 14px 18px;
+      font-family: var(--mono); font-size: 13px; line-height: 1.8;
+    }
+    .out-placeholder { color: var(--text-dim); font-style: italic; font-size: 12px; }
+    .out-stdout { color: var(--green); white-space: pre-wrap; word-break: break-all; }
+    .out-stderr { color: var(--red);   white-space: pre-wrap; word-break: break-all; }
+    .out-meta {
+      display: flex; gap: 16px; align-items: center;
+      margin-top: 14px; padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 11px; color: var(--text-dim);
+    }
+
+    /* ── Status bar ── */
+    .status-bar {
+      height: 24px; background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 16px; gap: 24px; flex-shrink: 0;
+    }
+    .status-item { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+    .status-accent { color: var(--accent); }
+    .status-cached { color: var(--green); display: none; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 32px; left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: var(--surface); border: 1px solid var(--border2);
+      color: var(--text); padding: 10px 22px;
+      font-family: var(--mono); font-size: 12px; letter-spacing: 1px;
+      border-radius: 4px; z-index: 9999;
+      opacity: 0; pointer-events: none;
+      transition: opacity .3s, transform .3s;
+    }
+    #toast.show  { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.ok    { border-color: var(--green); color: var(--green); }
+    #toast.error { border-color: var(--red);   color: var(--red); }
+  </style>
+</head>
+<body>
+<div class="editor-page">
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-logo">
+      <span class="logo-dot"></span> CR
+    </div>
+    <div class="sep"></div>
+    <div class="lang-tabs" id="langTabs">
+      <button class="lang-tab active" data-lang="python" onclick="switchLang('python',this)">🐍 Python</button>
+      <button class="lang-tab"        data-lang="java"   onclick="switchLang('java',this)">☕ Java</button>
+      <button class="lang-tab"        data-lang="cpp"    onclick="switchLang('cpp',this)">⚙️ C++</button>
+    </div>
+    <div class="sep"></div>
+    <span class="topbar-file" id="topbarFile">main.py</span>
+    <button class="run-btn" id="runBtn" onclick="runCode()">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <span id="runBtnText">RUN</span>
+    </button>
+    <div class="sep"></div>
+    <span class="user-email" id="userEmail"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e194928493a18499808c918d84cf828e8c">[email&#160;protected]</a></span>
+    <button class="logout-btn" onclick="logout()">LOGOUT</button>
+  </div>
+
+  <!-- Rate limit warning -->
+  <div class="rate-warning" id="rateWarning">
+    ⚠ Rate limit reached — please wait a moment before running again.
+  </div>
+
+  <!-- Body -->
+  <div class="editor-body">
+
+    <!-- History Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-head">
+        <span class="sidebar-title">History</span>
+        <button class="refresh-btn" onclick="loadHistory()" title="Refresh">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+      </div>
+      <div class="history-list" id="historyList">
+        <div class="history-empty">No executions yet.<br><br>Run some code to see your history here.</div>
+      </div>
+    </div>
+
+    <!-- Editor + Output -->
+    <div class="editor-main">
+      <div class="monaco-wrap">
+        <div id="monacoEditor"></div>
+      </div>
+
+      <!-- Resize handle -->
+      <div class="resize-handle" id="resizeHandle"></div>
+
+      <!-- Output -->
+      <div class="output-panel" id="outputPanel">
+        <div class="output-topbar">
+          <span class="output-label">Output</span>
+          <span class="output-ind ind-idle" id="outputInd">● IDLE</span>
+          <span class="output-stats" id="outputStats"></span>
+          <span class="status-cached" id="cachedBadge">⚡ CACHED</span>
+          <button class="clear-btn" onclick="clearOutput()">CLEAR</button>
+        </div>
+        <div class="output-content" id="outputContent">
+          <span class="out-placeholder">Press RUN (or Ctrl+Enter) to execute your code...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span class="status-item status-accent" id="statusLang">Python 3</span>
+    <span class="status-item" id="statusCursor">Ln 1, Col 1</span>
+    <span class="status-item">UTF-8</span>
+    <span class="status-item">🐳 Docker Sandboxed</span>
+    <span class="status-item" id="statusConn" style="margin-left:auto">⬤ Connecting...</span>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// ════════════════════════════════════════════
+//  CONFIG — change API_BASE to your EC2 URL
+// ════════════════════════════════════════════
+const API_BASE = 'http://localhost:3000';
+
+// ── Auth ──
+const token  = localStorage.getItem('cr_token');
+const userRaw = localStorage.getItem('cr_user');
+// Comment out the redirect below while testing without a backend
+// if (!token) { window.location.href = 'login.html'; }
+const user = userRaw ? JSON.parse(userRaw) : { email: 'demo@coderunner.io' };
+document.getElementById('userEmail').textContent = user.email || 'User';
+
+function logout() {
+  localStorage.removeItem('cr_token');
+  localStorage.removeItem('cr_user');
+  window.location.href = 'login.html';
+}
+
+// ── Language config ──
+const LANGS = {
+  python: {
+    label:  'Python 3',
+    file:   'main.py',
+    monaco: 'python',
+    code:   `# CodeRunner — Python 3\n# Press Ctrl+Enter or click RUN to execute\n\ndef fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)\n\nfor i in range(10):\n    print(f"fib({i}) = {fibonacci(i)}")\n`,
+  },
+  java: {
+    label:  'Java 17',
+    file:   'Main.java',
+    monaco: 'java',
+    code:   `// CodeRunner — Java 17\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from CodeRunner!");\n\n        for (int i = 1; i <= 5; i++) {\n            System.out.println("Iteration: " + i);\n        }\n    }\n}\n`,
+  },
+  cpp: {
+    label:  'C++17',
+    file:   'main.cpp',
+    monaco: 'cpp',
+    code:   `// CodeRunner — C++17\n#include <iostream>\n#include <vector>\nusing namespace std;\n\nint main() {\n    cout << "Hello from CodeRunner!" << endl;\n\n    vector<int> nums = {1, 2, 3, 4, 5};\n    for (int n : nums) {\n        cout << "Value: " << n << endl;\n    }\n    return 0;\n}\n`,
+  },
+};
+
+let currentLang = 'python';
+let editor = null;
+const codeCache = {
+  python: LANGS.python.code,
+  java:   LANGS.java.code,
+  cpp:    LANGS.cpp.code,
+};
+
+// Rate limiter (client side)
+const RATE_LIMIT = 5, RATE_WINDOW = 30000;
+let recentRuns = [];
+function isRateLimited() {
+  const now = Date.now();
+  recentRuns = recentRuns.filter(t => now - t < RATE_WINDOW);
+  return recentRuns.length >= RATE_LIMIT;
+}
+
+// ── Monaco init ──
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
+require(['vs/editor/editor.main'], () => {
+
+  monaco.editor.defineTheme('cr-dark', {
+    base: 'vs-dark', inherit: true,
+    rules: [
+      { token: 'comment',  foreground: '3d5060', fontStyle: 'italic' },
+      { token: 'keyword',  foreground: 'ff79c6' },
+      { token: 'string',   foreground: 'f1fa8c' },
+      { token: 'number',   foreground: 'bd93f9' },
+      { token: 'type',     foreground: '8be9fd' },
+      { token: 'function', foreground: '50fa7b' },
+    ],
+    colors: {
+      'editor.background':             '#080b0f',
+      'editor.foreground':             '#c9d8e8',
+      'editor.lineHighlightBackground':'#0d1117',
+      'editor.selectionBackground':    '#00d4ff1a',
+      'editorLineNumber.foreground':   '#2a3a4a',
+      'editorLineNumber.activeForeground': '#4a6070',
+      'editorGutter.background':       '#080b0f',
+      'editorCursor.foreground':       '#00d4ff',
+      'scrollbarSlider.background':    '#1e2a3855',
+      'editorBracketMatch.background': '#00d4ff11',
+      'editorBracketMatch.border':     '#00d4ff88',
+    }
+  });
+
+  editor = monaco.editor.create(document.getElementById('monacoEditor'), {
+    value:              codeCache[currentLang],
+    language:           LANGS[currentLang].monaco,
+    theme:              'cr-dark',
+    fontSize:           14,
+    fontFamily:         "'JetBrains Mono', monospace",
+    fontLigatures:      true,
+    lineNumbers:        'on',
+    minimap:            { enabled: true },
+    scrollBeyondLastLine: false,
+    automaticLayout:    true,
+    tabSize:            4,
+    insertSpaces:       true,
+    wordWrap:           'off',
+    renderLineHighlight:'all',
+    bracketPairColorization: { enabled: true },
+    padding:            { top: 16, bottom: 16 },
+    smoothScrolling:    true,
+    cursorBlinking:     'phase',
+    cursorSmoothCaretAnimation: 'on',
+  });
+
+  // Cursor position → status bar
+  editor.onDidChangeCursorPosition(e => {
+    document.getElementById('statusCursor').textContent =
+      `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+  });
+
+  // Ctrl/Cmd+Enter → run
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runCode);
+
+  // Cache edits per language
+  editor.onDidChangeModelContent(() => {
+    codeCache[currentLang] = editor.getValue();
+  });
+
+  // Check server connection
+  pingServer();
+  loadHistory();
+});
+
+// ── Language switching ──
+function switchLang(lang, btn) {
+  if (lang === currentLang) return;
+  if (editor) codeCache[currentLang] = editor.getValue();
+  currentLang = lang;
+
+  document.querySelectorAll('.lang-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  if (editor) {
+    const model = monaco.editor.createModel(codeCache[lang], LANGS[lang].monaco);
+    editor.setModel(model);
+    editor.onDidChangeModelContent(() => { codeCache[lang] = editor.getValue(); });
+    editor.focus();
+  }
+
+  document.getElementById('topbarFile').textContent = LANGS[lang].file;
+  document.getElementById('statusLang').textContent  = LANGS[lang].label;
+  document.getElementById('cachedBadge').style.display = 'none';
+  clearOutput();
+}
+
+// ── Run code ──
+async function runCode() {
+  if (!editor) return;
+
+  if (isRateLimited()) {
+    document.getElementById('rateWarning').classList.add('show');
+    setTimeout(() => document.getElementById('rateWarning').classList.remove('show'), 5000);
+    return;
+  }
+
+  const code = editor.getValue().trim();
+  if (!code) { showToast('Write some code first!'); return; }
+
+  const runBtn = document.getElementById('runBtn');
+  const runText = document.getElementById('runBtnText');
+  runBtn.disabled = true;
+  runText.textContent = '...';
+  setOutputState('running', '● RUNNING');
+
+  document.getElementById('outputContent').innerHTML =
+    `<span style="color:var(--text-dim);font-size:12px">🐳 Spinning up Docker container...</span>`;
+  document.getElementById('outputStats').textContent = '';
+  document.getElementById('cachedBadge').style.display = 'none';
+
+  const t0 = Date.now();
+
+  try {
+    const res = await fetch(`${API_BASE}/api/execute`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ language: currentLang, code }),
+    });
+
+    if (res.status === 401) { logout(); return; }
+
+    if (res.status === 429) {
+      document.getElementById('rateWarning').classList.add('show');
+      setTimeout(() => document.getElementById('rateWarning').classList.remove('show'), 6000);
+      setOutputState('error', '● RATE LIMITED');
+      document.getElementById('outputContent').innerHTML =
+        `<span class="out-stderr">Rate limit exceeded. Please wait before running again.</span>`;
+      return;
+    }
+
+    const data = await res.json();
+    const ms   = Date.now() - t0;
+    recentRuns.push(Date.now());
+    renderOutput(data, ms);
+    loadHistory();
+
+  } catch (err) {
+    setOutputState('error', '● ERROR');
+    document.getElementById('outputContent').innerHTML =
+      `<span class="out-stderr">Cannot reach server.\n\nMake sure the backend is running at:\n${API_BASE}\n\nError: ${err.message}</span>`;
+  } finally {
+    runBtn.disabled = false;
+    runText.textContent = 'RUN';
+  }
+}
+
+function renderOutput(data, ms) {
+  const out = document.getElementById('outputContent');
+  const cached = !!data.cached;
+
+  document.getElementById('cachedBadge').style.display = cached ? 'inline' : 'none';
+
+  const hasErr = data.stderr && data.stderr.trim();
+  setOutputState(hasErr ? 'error' : 'success', hasErr ? '● ERROR' : '● SUCCESS');
+
+  let html = '';
+  if (data.stdout && data.stdout.trim())
+    html += `<div class="out-stdout">${esc(data.stdout)}</div>`;
+  if (data.stderr && data.stderr.trim())
+    html += `<div class="out-stderr">${esc(data.stderr)}</div>`;
+  if (!data.stdout?.trim() && !data.stderr?.trim())
+    html += `<span class="out-placeholder">Program produced no output.</span>`;
+
+  html += `<div class="out-meta">
+    <span>⏱ ${ms}ms</span>
+    ${cached ? '<span style="color:var(--green)">⚡ Cached result</span>' : '<span>🐳 Executed in Docker</span>'}
+    <span>${LANGS[currentLang].label}</span>
+  </div>`;
+
+  out.innerHTML = html;
+
+  const lines = (data.stdout || '').split('\n').filter(Boolean).length;
+  document.getElementById('outputStats').textContent = lines ? `${lines} line${lines>1?'s':''}` : '';
+}
+
+function setOutputState(state, txt) {
+  const el = document.getElementById('outputInd');
+  el.className = 'output-ind ' + {
+    idle:'ind-idle', running:'ind-running', success:'ind-success', error:'ind-error'
+  }[state];
+  el.textContent = txt;
+}
+
+function clearOutput() {
+  document.getElementById('outputContent').innerHTML =
+    '<span class="out-placeholder">Press RUN (or Ctrl+Enter) to execute your code...</span>';
+  document.getElementById('outputStats').textContent = '';
+  document.getElementById('cachedBadge').style.display = 'none';
+  setOutputState('idle', '● IDLE');
+}
+
+// ── History ──
+async function loadHistory() {
+  try {
+    const res = await fetch(`${API_BASE}/api/execute/history`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.status === 401) { logout(); return; }
+    const data = await res.json();
+    renderHistory(data.submissions || []);
+  } catch {
+    document.getElementById('historyList').innerHTML =
+      `<div class="history-empty">Backend not connected.<br><br>History will appear<br>once server is running.</div>`;
+  }
+}
+
+function renderHistory(subs) {
+  const list = document.getElementById('historyList');
+  if (!subs.length) {
+    list.innerHTML = `<div class="history-empty">No executions yet.<br><br>Run some code to see your history here.</div>`;
+    return;
+  }
+  list.innerHTML = subs.slice(0, 60).map((s, i) => {
+    const lang    = s.language || 'python';
+    const isErr   = s.status === 'error';
+    const preview = (s.code || '').split('\n').find(l => l.trim()) || '—';
+    return `<div class="history-item" onclick="loadItem(this,'${escAttr(s.code)}','${lang}')">
+      <div class="history-item-top">
+        <span class="hlang hlang-${lang}">${lang}</span>
+        <span class="hstatus ${isErr?'err':'ok'}">${isErr?'✕':'✓'}</span>
+      </div>
+      <div class="hpreview">${esc(preview.slice(0,38))}</div>
+      <div class="htime">${relTime(s.created_at)}</div>
+    </div>`;
+  }).join('');
+}
+
+function loadItem(el, code, lang) {
+  const decoded = code.replace(/&#10;/g,'\n').replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+  if (lang !== currentLang) {
+    const tab = document.querySelector(`[data-lang="${lang}"]`);
+    if (tab) switchLang(lang, tab);
+  }
+  if (editor) { editor.setValue(decoded); editor.focus(); }
+  document.querySelectorAll('.history-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  showToast('Code loaded from history');
+}
+
+// ── Resize output panel ──
+const handle = document.getElementById('resizeHandle');
+const panel  = document.getElementById('outputPanel');
+let dragging = false, startY, startH;
+handle.addEventListener('mousedown', e => {
+  dragging = true; startY = e.clientY; startH = panel.offsetHeight;
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'row-resize';
+});
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const newH = Math.max(80, Math.min(startH + (startY - e.clientY), window.innerHeight * .7));
+  panel.style.height = newH + 'px';
+});
+document.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging = false;
+  document.body.style.userSelect = '';
+  document.body.style.cursor = '';
+  if (editor) editor.layout();
+});
+
+// ── Server ping ──
+async function pingServer() {
+  const el = document.getElementById('statusConn');
+  try {
+    const r = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+    if (r.ok) { el.textContent = '⬤ Connected'; el.style.color = 'var(--green)'; }
+    else throw new Error();
+  } catch {
+    el.textContent = '⬤ Offline'; el.style.color = 'var(--red)';
+  }
+}
+
+// ── Toast ──
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show ' + type;
+  clearTimeout(t._t); t._t = setTimeout(() => t.className='', 2800);
+}
+
+// ── Helpers ──
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function escAttr(s) {
+  return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/\n/g,'&#10;');
+}
+
+function relTime(ts) {
+  if (!ts) return '';
+
+  const diff = Math.floor((Date.now() - new Date(ts)) / 1000);
+
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+</script>
+</body>
+</html> 

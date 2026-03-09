@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up — CodeRunner</title>
+  <link rel="stylesheet" href="css/global.css">
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+
+<div class="auth-page">
+
+  <!-- Left: Branding -->
+  <div class="auth-left noise">
+    <div class="auth-left-content anim-fade-up">
+      <a href="home.html" class="auth-logo">
+        <span style="width:8px;height:8px;background:var(--accent);border-radius:50%;animation:blink 2.5s infinite;display:inline-block"></span>
+        CODERUNNER
+      </a>
+      <div class="auth-tagline">
+        Start running<br>code in <em>seconds.</em>
+      </div>
+      <p class="auth-desc">
+        Free account. Instant access. Secure sandboxed execution across Python, Java, and C++ — with your full execution history saved.
+      </p>
+      <div class="auth-code-window">
+        <div class="auth-code-chrome">
+          <div class="dots">
+            <span style="background:#ff5f57"></span>
+            <span style="background:#febc2e"></span>
+            <span style="background:#28c840"></span>
+          </div>
+          <span class="file">quickstart.py</span>
+        </div>
+        <div class="auth-code-body">
+          <div><span class="kw">import</span> coderunner</div>
+          <div></div>
+          <div>coderunner.<span class="fn">signup</span>() <span style="color:var(--text-dim)"># ← you are here</span></div>
+          <div>coderunner.<span class="fn">run</span>(<span class="str">"hello.py"</span>)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Form -->
+  <div class="auth-right">
+    <div class="auth-form-wrap anim-fade-up" style="animation-delay:.1s">
+
+      <div class="auth-form-header">
+        <h2>Create account</h2>
+        <p>Already have one? <a href="login.html">Sign in →</a></p>
+      </div>
+
+      <div class="form-error" id="formError"></div>
+
+      <div class="auth-form" id="signupForm">
+
+        <div class="field">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required>
+          <span class="field-error" id="emailError"></span>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Min 8 characters" autocomplete="new-password" required oninput="checkPassword(this.value)">
+          <span class="field-error" id="passwordError"></span>
+
+          <!-- Strength meter -->
+          <div class="password-strength" id="strengthBars">
+            <div class="strength-bar" id="bar1"></div>
+            <div class="strength-bar" id="bar2"></div>
+            <div class="strength-bar" id="bar3"></div>
+            <div class="strength-bar" id="bar4"></div>
+          </div>
+          <div class="strength-label" id="strengthLabel"></div>
+
+          <!-- Requirements -->
+          <div class="pass-reqs" id="passReqs">
+            <div class="req-item" id="req-len">
+              <span class="req-icon">○</span> At least 8 characters
+            </div>
+            <div class="req-item" id="req-upper">
+              <span class="req-icon">○</span> One uppercase letter
+            </div>
+            <div class="req-item" id="req-num">
+              <span class="req-icon">○</span> One number
+            </div>
+            <div class="req-item" id="req-special">
+              <span class="req-icon">○</span> One special character
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="confirm">Confirm Password</label>
+          <input type="password" id="confirm" placeholder="Re-enter password" autocomplete="new-password" required>
+          <span class="field-error" id="confirmError"></span>
+        </div>
+
+        <button class="btn btn-primary auth-submit" id="signupBtn" type="button" onclick="handleSignup()">
+          <span class="btn-text">Create Account</span>
+          <span class="btn-spinner"></span>
+        </button>
+
+      </div>
+
+      <div class="auth-footer-note">
+        By signing up you agree to our <a href="#">Terms</a> &amp; <a href="#">Privacy Policy</a>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script src="js/signup.js"></script>
+</body>
+</html>
